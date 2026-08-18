@@ -1,13 +1,18 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
-import { Host } from './host.schema';
 
 export type DeviceDocument = Device & Document;
 
-export enum DeviceStatus {
-  ACTIVE = 'active',
-  BLOCKED = 'blocked',
+@Schema({ _id: true })
+export class CustomPlaylist {
+  @Prop({ required: true })
+  name: string;
+
+  @Prop({ required: true })
+  url: string;
 }
+
+export const CustomPlaylistSchema = SchemaFactory.createForClass(CustomPlaylist);
 
 @Schema({ timestamps: true })
 export class Device {
@@ -17,17 +22,8 @@ export class Device {
   @Prop({ required: true })
   deviceKey: string;
 
-  @Prop({ required: true })
-  username: string;
-
-  @Prop({ required: true })
-  password: string;
-
-  @Prop({ type: String, enum: DeviceStatus, default: DeviceStatus.ACTIVE })
-  status: string;
-
-  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Host', required: false })
-  host: Host;
+  @Prop({ type: [CustomPlaylistSchema], default: [] })
+  customPlaylists: CustomPlaylist[];
 
   @Prop({ type: Date, default: Date.now })
   lastActive: Date;

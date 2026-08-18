@@ -1,59 +1,122 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { DevicesService } from '../devices/devices.service';
-import { DeviceStatus } from '../schemas/device.schema';
+import { CustomersService } from '../customers/customers.service';
+import { CustomerStatus } from '../schemas/customer.schema';
 import { Host } from '../schemas/host.schema';
+import { JwtService } from '@nestjs/jwt';
+import { DevicesService } from '../devices/devices.service';
+import { HostsService } from '../hosts/hosts.service';
+import { Subject } from 'rxjs';
 
 @Injectable()
 export class ClientService {
-  constructor(private readonly devicesService: DevicesService) {}
+  constructor(
+    private readonly customersService: CustomersService,
+    private readonly devicesService: DevicesService,
+    private readonly jwtService: JwtService,
+    private readonly hostsService: HostsService,
+  ) {}
+
+  private readonly deviceEvents = new Map<string, Subject<{ data: any }>>();
+
+  getDeviceSse(macAddress: string) {
+    const normalizedMac = macAddress.toUpperCase().replace(/[^A-F0-9]/g, '');
+    if (!this.deviceEvents.has(normalizedMac)) {
+      this.deviceEvents.set(normalizedMac, new Subject());
+    }
+    return this.deviceEvents.get(normalizedMac)!.asObservable();
+  }
+
+  triggerDeviceRefresh(macAddress: string) {
+    const normalizedMac = macAddress.toUpperCase().replace(/[^A-F0-9]/g, '');
+    if (this.deviceEvents.has(normalizedMac)) {
+      this.deviceEvents.get(normalizedMac)!.next({ data: { type: 'REFRESH' } });
+    }
+  }
+
+  async registerDevice(macAddress: string, deviceKey: string) {
+    return this.devicesService.register(macAddress, deviceKey);
+  }
 
   async auth(macAddress: string, deviceKey: string) {
     // Normalize MAC address (uppercase, remove special chars)
     const normalizedMac = macAddress.toUpperCase().replace(/[^A-F0-9]/g, '');
+    let customer = await this.customersService.findByMac(normalizedMac);
 
-    let device = await this.devicesService.findByMac(normalizedMac);
-
-    if (!device) {
-      // Auto-register device on first contact with empty credentials
-      device = (await this.devicesService.create({ 
-        macAddress: normalizedMac,
-        deviceKey: deviceKey,
-        username: '',
-        password: '' 
-      })) as any;
+    if (!customer) {
+      // Auto-register logic is removed since devices are now tied to subscriptions which are created by admins.
+      throw new NotFoundException('error_device_not_registered');
     }
 
-    if (!device) {
-      throw new NotFoundException('حدث خطأ أثناء تسجيل الجهاز');
+    // Find the most recent subscription for this device
+    const subscriptionsForMac = customer.subscriptions.filter(
+      s => s.macAddress.toUpperCase().replace(/[^A-F0-9]/g, '') === normalizedMac
+    );
+    if (customer.status === CustomerStatus.BLOCKED) {
+      throw new ForbiddenException('حساب العميل محظور. يرجى التواصل مع الإدارة.');
     }
 
-    // Verify Device Key
-    if (device.deviceKey !== deviceKey) {
-      throw new ForbiddenException('Device Key غير صالح. هذا الجهاز مرتبط بمفتاح آخر.');
+    // Return all active subscriptions that match this MAC address and Device Key
+    const validSubs = subscriptionsForMac.filter(s => {
+      if (s.deviceKey !== deviceKey) return false;
+      if (s.status === CustomerStatus.BLOCKED) return false;
+      
+      // Check app activation
+      if (s.appActive === false) return false;
+      if (s.appExpiry && new Date(s.appExpiry) < new Date()) return false;
+      
+      return true;
+    });
+
+    const activeSubscriptions = await Promise.all(validSubs.map(async (s) => {
+      let hUrl = '';
+      let hName = 'Admin Subscription';
+
+      const isObjectIdString = typeof s.host === 'string' && /^[a-f\d]{24}$/i.test(s.host);
+      const isObjectIdObject = s.host && typeof s.host === 'object' && !('url' in (s.host as any));
+
+      if (isObjectIdObject || isObjectIdString) {
+         try {
+            const hostDoc = await this.hostsService.findOne((s.host as any).toString());
+            if (hostDoc) {
+              hUrl = hostDoc.url;
+              hName = hostDoc.name;
+            }
+         } catch(e) { }
+      } else if (s.host && typeof s.host === 'object' && ('url' in (s.host as any))) {
+         hUrl = (s.host as any).url;
+         hName = (s.host as any).name;
+      } else if (typeof s.host === 'string') {
+         hUrl = s.host;
+      }
+
+      return {
+        id: (s as any)._id?.toString() || Math.random().toString(),
+        host: hUrl,
+        name: hName,
+        username: s.username,
+        password: s.password,
+      };
+    }));
+
+    if (activeSubscriptions.length === 0) {
+      throw new ForbiddenException('لا يوجد اشتراكات فعالة لهذا الجهاز، أو قد تم حظرها. يرجى التواصل مع الإدارة.');
     }
 
-    // Update last active timestamp
-    await this.devicesService.updateLastActive(normalizedMac);
+    // Update last active timestamp for this device
+    await this.customersService.updateLastActive(normalizedMac);
 
-    if (device.status === DeviceStatus.BLOCKED) {
-      throw new ForbiddenException('هذا الجهاز محظور. يرجى التواصل مع الإدارة.');
-    }
-
-    if (!device.host) {
-      throw new NotFoundException('لم يتم تعيين خادم بث (Host) لهذا الجهاز بعد. يرجى التواصل مع الإدارة.');
-    }
-
-    const host = device.host as unknown as Host & { _id: string };
-    
-    // Validate if the device has valid credentials
-    if (!device.username || !device.password) {
-      throw new ForbiddenException('لم يتم تزويد هذا الجهاز بمعلومات تسجيل دخول للبث (Username/Password). يرجى التواصل مع الإدارة.');
-    }
+    const token = this.jwtService.sign({ 
+      sub: (customer as any)._id?.toString(), 
+      mac: normalizedMac,
+      name: customer.name 
+    });
 
     return {
-      host: (host as any).url,
-      username: device.username,
-      password: device.password,
+      token,
+      customer: {
+        name: customer.name,
+        subscriptions: activeSubscriptions,
+      },
     };
   }
 }

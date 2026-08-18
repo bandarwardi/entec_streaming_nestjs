@@ -3,11 +3,14 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { HostsModule } from './hosts/hosts.module';
-import { DevicesModule } from './devices/devices.module';
+import { CustomersModule } from './customers/customers.module';
 import { ClientModule } from './client/client.module';
 
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { PlansModule } from './plans/plans.module';
+import { DevicesModule } from './devices/devices.module';
+import { PortalModule } from './portal/portal.module';
 
 @Module({
   imports: [
@@ -21,8 +24,8 @@ import { MongooseModule } from '@nestjs/mongoose';
     }),
     AuthModule, 
     HostsModule, 
-    DevicesModule, 
-    ClientModule
+    CustomersModule, 
+    ClientModule, PlansModule, DevicesModule, PortalModule
   ],
   controllers: [AppController],
   providers: [AppService],

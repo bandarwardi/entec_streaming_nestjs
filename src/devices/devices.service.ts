@@ -1,8 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Device, DeviceDocument, DeviceStatus } from '../schemas/device.schema';
-import { CreateDeviceDto } from './create-device.dto';
+import { Device, DeviceDocument } from '../schemas/device.schema';
 
 @Injectable()
 export class DevicesService {
@@ -11,85 +10,49 @@ export class DevicesService {
   ) {}
 
   async findAll(): Promise<Device[]> {
-    return this.deviceModel.find().populate('host').exec();
-  }
-
-  async findOne(id: string): Promise<Device> {
-    const device = await this.deviceModel.findById(id).populate('host');
-    if (!device) throw new NotFoundException('الجهاز غير موجود');
-    return device;
+    return this.deviceModel.find().exec();
   }
 
   async findByMac(macAddress: string): Promise<DeviceDocument | null> {
-    return this.deviceModel.findOne({ macAddress }).populate('host').exec();
+    const normalized = macAddress.toUpperCase().replace(/[^A-F0-9]/g, '');
+    const withColons = normalized.match(/.{1,2}/g)?.join(':') || normalized;
+    return this.deviceModel.findOne({ macAddress: { $in: [normalized, withColons] } }).exec();
   }
 
-  async create(dto: CreateDeviceDto): Promise<Device> {
-    const device = new this.deviceModel({
-      macAddress: dto.macAddress,
-      deviceKey: dto.deviceKey,
-      username: dto.username,
-      password: dto.password,
-      host: dto.hostId || null,
-    });
-    return device.save();
-  }
-  
-  async update(id: string, dto: Partial<CreateDeviceDto>): Promise<Device> {
-    const updateData: any = { ...dto };
-    if (dto.hostId !== undefined) {
-      updateData.host = dto.hostId;
-      delete updateData.hostId;
+  async register(macAddress: string, deviceKey: string): Promise<Device> {
+    const normalized = macAddress.toUpperCase().replace(/[^A-F0-9]/g, '');
+    const withColons = normalized.match(/.{1,2}/g)?.join(':') || normalized;
+    
+    let device = await this.deviceModel.findOne({ macAddress: { $in: [normalized, withColons] } });
+    
+    if (device) {
+      device.deviceKey = deviceKey;
+      device.lastActive = new Date();
+      return device.save();
     }
-    const updated = await this.deviceModel.findByIdAndUpdate(id, updateData, { new: true }).populate('host');
-    if (!updated) throw new NotFoundException('الجهاز غير موجود');
-    return updated;
+    
+    const newDevice = new this.deviceModel({
+      macAddress: withColons,
+      deviceKey,
+      lastActive: new Date(),
+    });
+    return newDevice.save();
   }
 
-  async assignHost(id: string, hostId: string): Promise<Device> {
-    const device = await this.deviceModel.findByIdAndUpdate(
-      id,
-      { host: hostId },
-      { new: true },
-    ).populate('host');
-    if (!device) throw new NotFoundException('الجهاز غير موجود');
-    return device;
+  async getPlaylists(macAddress: string, deviceKey: string) {
+    const device = await this.findByMac(macAddress);
+    if (!device) throw new NotFoundException('الجهاز غير مسجل');
+    if (device.deviceKey !== deviceKey) throw new ConflictException('رمز الجهاز غير صحيح');
+    return device.customPlaylists || [];
   }
 
-  async block(id: string): Promise<Device> {
-    const device = await this.deviceModel.findByIdAndUpdate(
-      id,
-      { status: DeviceStatus.BLOCKED },
-      { new: true },
-    ).populate('host');
-    if (!device) throw new NotFoundException('الجهاز غير موجود');
-    return device;
-  }
-
-  async unblock(id: string): Promise<Device> {
-    const device = await this.deviceModel.findByIdAndUpdate(
-      id,
-      { status: DeviceStatus.ACTIVE },
-      { new: true },
-    ).populate('host');
-    if (!device) throw new NotFoundException('الجهاز غير موجود');
-    return device;
-  }
-
-  async remove(id: string): Promise<{ message: string }> {
-    const deleted = await this.deviceModel.findByIdAndDelete(id);
-    if (!deleted) throw new NotFoundException('الجهاز غير موجود');
-    return { message: 'تم حذف الجهاز بنجاح' };
-  }
-
-  async updateLastActive(macAddress: string): Promise<void> {
-    await this.deviceModel.findOneAndUpdate({ macAddress }, { lastActive: new Date() });
-  }
-
-  async getStats() {
-    const total = await this.deviceModel.countDocuments();
-    const active = await this.deviceModel.countDocuments({ status: DeviceStatus.ACTIVE });
-    const blocked = await this.deviceModel.countDocuments({ status: DeviceStatus.BLOCKED });
-    return { total, active, blocked };
+  async updatePlaylists(macAddress: string, deviceKey: string, playlists: { name: string; url: string }[]) {
+    const device = await this.findByMac(macAddress);
+    if (!device) throw new NotFoundException('الجهاز غير مسجل');
+    if (device.deviceKey !== deviceKey) throw new ConflictException('رمز الجهاز غير صحيح');
+    
+    device.customPlaylists = playlists;
+    await device.save();
+    return device.customPlaylists;
   }
 }
