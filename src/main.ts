@@ -6,7 +6,7 @@ async function bootstrap() {
 
   // Enable CORS for the admin frontend
   app.enableCors({
-    origin: ['http://localhost:8080', 'http://localhost:3001', '*'],
+    origin: ['http://localhost:8080', 'http://localhost:3001', 'https://entec-streaming-admin.web.app', '*'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
