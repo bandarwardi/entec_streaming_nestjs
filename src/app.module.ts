@@ -18,7 +18,8 @@ import { PortalModule } from './portal/portal.module';
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI', 'mongodb://localhost:27017/streaming'),
+        uri: configService.get<string>('MONGODB_URI', 'mongodb://localhost:27017/Streaming'),
+        dbName: 'Streaming',
       }),
       inject: [ConfigService],
     }),

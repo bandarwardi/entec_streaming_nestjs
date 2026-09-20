@@ -11,7 +11,7 @@ export class CustomersService {
   ) {}
 
   async findAll(): Promise<Customer[]> {
-    return this.customerModel.find().populate('subscriptions.host').exec();
+    return this.customerModel.find({ phone: { $exists: false } }).populate('subscriptions.host').exec();
   }
 
   async findOne(id: string): Promise<Customer> {
@@ -92,13 +92,15 @@ export class CustomersService {
   }
 
   async getStats() {
-    const total = await this.customerModel.countDocuments();
-    const active = await this.customerModel.countDocuments({ status: CustomerStatus.ACTIVE });
-    const blocked = await this.customerModel.countDocuments({ status: CustomerStatus.BLOCKED });
+    const filter = { phone: { $exists: false } };
+    const total = await this.customerModel.countDocuments(filter);
+    const active = await this.customerModel.countDocuments({ ...filter, status: CustomerStatus.ACTIVE });
+    const blocked = await this.customerModel.countDocuments({ ...filter, status: CustomerStatus.BLOCKED });
     
-    // Count total subscriptions (which equal total devices now) across all customers
+    // Count total subscriptions across streaming customers only
     const result = await this.customerModel.aggregate([
-      { $project: { numberOfDevices: { $size: "$subscriptions" } } },
+      { $match: filter },
+      { $project: { numberOfDevices: { $size: { $ifNull: ["$subscriptions", []] } } } },
       { $group: { _id: null, totalDevices: { $sum: "$numberOfDevices" } } }
     ]);
     const totalDevices = result.length > 0 ? result[0].totalDevices : 0;
