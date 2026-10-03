@@ -41,6 +41,11 @@ export class PortalController {
     return this.portalService.updateSubscription(body.macAddress, body.deviceKey, subId, body.data);
   }
 
+  @Get('hosts')
+  getHosts() {
+    return this.portalService.getHosts();
+  }
+
   @Post('subscription/add')
   addSubscription(
     @Body() body: { macAddress: string; deviceKey: string; data: any }

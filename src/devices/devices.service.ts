@@ -39,15 +39,66 @@ export class DevicesService {
     if (device) {
       device.deviceKey = deviceKey;
       device.lastActive = new Date();
+      if (!device.trialStartsAt) {
+        device.trialStartsAt = (device as any).createdAt || new Date();
+      }
+      if (!device.trialEndsAt) {
+        device.trialEndsAt = new Date(new Date(device.trialStartsAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+      }
       return device.save();
     }
     
+    const now = new Date();
+    const trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     const newDevice = new this.deviceModel({
       macAddress: withColons,
       deviceKey,
-      lastActive: new Date(),
+      lastActive: now,
+      trialStartsAt: now,
+      trialEndsAt,
     });
     return newDevice.save();
+  }
+
+  async getTrialInfo(macAddress: string) {
+    const serverNow = new Date();
+    let device = await this.findByMac(macAddress);
+    
+    if (!device) {
+      // If not registered yet, default 7 days from now
+      const trialEndsAt = new Date(serverNow.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return {
+        serverTime: serverNow.toISOString(),
+        trialStartsAt: serverNow.toISOString(),
+        trialEndsAt: trialEndsAt.toISOString(),
+        isTrialActive: true,
+        daysRemaining: 7,
+        hoursRemaining: 168,
+      };
+    }
+
+    if (!device.trialStartsAt) {
+      device.trialStartsAt = (device as any).createdAt || serverNow;
+    }
+    if (!device.trialEndsAt) {
+      device.trialEndsAt = new Date(new Date(device.trialStartsAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+      await device.save();
+    }
+
+    const trialEndsAt = new Date(device.trialEndsAt);
+    const isTrialActive = serverNow.getTime() < trialEndsAt.getTime();
+    const diffMs = trialEndsAt.getTime() - serverNow.getTime();
+    const daysRemaining = isTrialActive ? Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24))) : 0;
+    const hoursRemaining = isTrialActive ? Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60))) : 0;
+
+    return {
+      serverTime: serverNow.toISOString(),
+      trialStartsAt: new Date(device.trialStartsAt).toISOString(),
+      trialEndsAt: trialEndsAt.toISOString(),
+      isTrialActive,
+      daysRemaining,
+      hoursRemaining,
+    };
   }
 
   async getPlaylists(macAddress: string, deviceKey: string) {

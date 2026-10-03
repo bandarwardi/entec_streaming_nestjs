@@ -27,6 +27,12 @@ export class Device {
 
   @Prop({ type: Date, default: Date.now })
   lastActive: Date;
+
+  @Prop({ type: Date, default: Date.now })
+  trialStartsAt: Date;
+
+  @Prop({ type: Date })
+  trialEndsAt: Date;
 }
 
 export const DeviceSchema = SchemaFactory.createForClass(Device);

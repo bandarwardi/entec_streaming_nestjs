@@ -20,6 +20,11 @@ export class ClientController {
     return this.clientService.registerDevice(body.macAddress, body.deviceKey);
   }
 
+  @Post('status')
+  getStatus(@Body() body: { macAddress: string; deviceKey?: string }) {
+    return this.clientService.getStatus(body.macAddress, body.deviceKey);
+  }
+
   @Sse('events')
   sse(@Query('macAddress') macAddress: string) {
     return this.clientService.getDeviceSse(macAddress);

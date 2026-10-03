@@ -111,10 +111,26 @@ export class PortalService {
     const customer = await this.customersService.findByMac(macAddress);
     if (!customer) throw new UnauthorizedException('العميل غير موجود');
 
+    let hostValue = data.host;
+    if (hostValue) {
+      const allHosts = await this.hostsService.findAll();
+      const cleanInput = String(hostValue).trim().replace(/\/+$/, '').toLowerCase();
+      const matchedHost = allHosts.find(h => 
+        h.url?.replace(/\/+$/, '').toLowerCase() === cleanInput ||
+        h.name?.toLowerCase() === cleanInput ||
+        (cleanInput.includes('://') && h.url && cleanInput.split('://')[1] === h.url.replace(/\/+$/, '').split('://')[1])
+      );
+      if (matchedHost) {
+        hostValue = (matchedHost as any)._id;
+      } else {
+        hostValue = String(data.host).trim();
+      }
+    }
+
     // Update the subscription
     const updatedSubs = customer.subscriptions.map(s => {
       if ((s as any)._id.toString() === subId) {
-        return { ...s, ...data };
+        return { ...s, ...data, ...(hostValue !== undefined ? { host: hostValue } : {}) };
       }
       return s;
     });
@@ -129,22 +145,58 @@ export class PortalService {
       throw new UnauthorizedException('بيانات الدخول غير صحيحة');
     }
 
-    const customer = await this.customersService.findByMac(macAddress);
-    if (!customer) throw new UnauthorizedException('العميل غير موجود');
+    let customer: any = await this.customersService.findByMac(macAddress);
+
+    // Check if host matches any registered Host in hosts collection
+    let hostValue = data.host;
+    let hName = data.host;
+    let hUrl = data.host;
+    let hId: any = null;
+
+    if (hostValue) {
+      const allHosts = await this.hostsService.findAll();
+      const cleanInput = String(hostValue).trim().replace(/\/+$/, '').toLowerCase();
+      const matchedHost = allHosts.find(h => 
+        h.url?.replace(/\/+$/, '').toLowerCase() === cleanInput ||
+        h.name?.toLowerCase() === cleanInput ||
+        (cleanInput.includes('://') && h.url && cleanInput.split('://')[1] === h.url.replace(/\/+$/, '').split('://')[1])
+      );
+      if (matchedHost) {
+        hId = (matchedHost as any)._id;
+        hName = matchedHost.name;
+        hUrl = matchedHost.url;
+        hostValue = hId;
+      } else {
+        hostValue = String(data.host).trim();
+      }
+    }
 
     // Create a new subscription entry with a new ObjectId
     const mongoose = require('mongoose');
     const newSub = {
       _id: new mongoose.Types.ObjectId(),
       status: 'active',
-      macAddress: macAddress,
-      deviceKey: deviceKey,
+      macAddress: device.macAddress,
+      deviceKey: device.deviceKey,
       lastActive: new Date(),
-      ...data, // contains username, password, host
+      username: data.username,
+      password: data.password,
+      host: hostValue,
+      appActive: true,
+      appExpiry: null,
     };
 
-    const updatedSubs = [...customer.subscriptions, newSub];
-    await this.customersService.update(customer._id.toString(), { subscriptions: updatedSubs as any });
+    if (!customer) {
+      // Auto-create customer in admin panel with MAC address as default name
+      customer = await this.customersService.create({
+        name: device.macAddress,
+        status: 'active',
+        subscriptions: [newSub],
+      } as any);
+    } else {
+      const updatedSubs = [...customer.subscriptions, newSub];
+      await this.customersService.update(customer._id.toString(), { subscriptions: updatedSubs as any });
+    }
     
     // Return the created sub format matching frontend expectations
     return { 
@@ -154,9 +206,9 @@ export class PortalService {
         status: newSub.status,
         username: newSub.username,
         password: newSub.password,
-        hostId: null,
-        hostName: newSub.host,
-        hostUrl: newSub.host,
+        hostId: hId,
+        hostName: hName,
+        hostUrl: hUrl,
       }
     };
   }
@@ -166,6 +218,28 @@ export class PortalService {
   }
 
   async updatePlaylists(macAddress: string, deviceKey: string, playlists: { name: string; url: string }[]) {
-    return this.devicesService.updatePlaylists(macAddress, deviceKey, playlists);
+    const device = await this.devicesService.findByMac(macAddress);
+    if (!device || device.deviceKey !== deviceKey) {
+      throw new UnauthorizedException('بيانات الدخول غير صحيحة');
+    }
+
+    const updated = await this.devicesService.updatePlaylists(macAddress, deviceKey, playlists);
+
+    // If client added playlists, ensure customer exists in admin panel
+    if (playlists && playlists.length > 0) {
+      let customer = await this.customersService.findByMac(macAddress);
+      if (!customer) {
+        await this.customersService.create({
+          name: device.macAddress,
+          status: 'active',
+          subscriptions: [],
+        } as any);
+      }
+    }
+    return updated;
+  }
+
+  async getHosts() {
+    return this.hostsService.findAll();
   }
 }
