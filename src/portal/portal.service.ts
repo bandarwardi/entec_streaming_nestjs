@@ -70,11 +70,12 @@ export class PortalService {
           }
 
           if ((s as any).playlistPinHash) {
-            return { _id: (s as any)._id, status: s.status, appActive: s.appActive, appExpiry: s.appExpiry, isLocked: true };
+            return { _id: (s as any)._id, playlistName: s.playlistName || hName || 'اشتراك Xtream', status: s.status, appActive: s.appActive, appExpiry: s.appExpiry, isLocked: true };
           }
 
           return {
             _id: (s as any)._id,
+            playlistName: s.playlistName || hName || 'اشتراك Xtream',
             status: s.status,
             username: s.username,
             password: s.password,
@@ -140,7 +141,7 @@ export class PortalService {
       const hostDoc = await this.hostsService.findOne(host);
       if (hostDoc) { hostId = (hostDoc as any)._id; hostName = hostDoc.name; hostUrl = hostDoc.url; }
     }
-    return { username: subscription.username, password: subscription.password, hostId, hostName, hostUrl };
+    return { playlistName: subscription.playlistName || hostName || 'اشتراك Xtream', username: subscription.username, password: subscription.password, hostId, hostName, hostUrl };
   }
 
   async setSubscriptionPin(macAddress: string, deviceKey: string, subId: string, pin: string | null, currentPin?: string) {
@@ -244,6 +245,7 @@ export class PortalService {
       deviceKey: device.deviceKey,
       lastActive: new Date(),
       username: data.username,
+      playlistName: String(data.playlistName || data.name || data.username || hName || 'اشتراك Xtream').trim(),
       password: data.password,
       host: hostValue,
       ...(data.playlistPin ? { playlistPin: data.playlistPin } : {}),
@@ -274,6 +276,7 @@ export class PortalService {
         _id: newSub._id.toString(),
         status: newSub.status,
         username: newSub.username,
+        playlistName: newSub.playlistName,
         password: newSub.password,
         hostId: hId,
         hostName: hName,

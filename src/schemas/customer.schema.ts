@@ -16,6 +16,9 @@ export class CustomerSubscription {
   @Prop({ required: true })
   username: string;
 
+  @Prop()
+  playlistName?: string;
+
   @Prop({ required: true })
   password: string;
 

@@ -1,6 +1,7 @@
 export class CustomerSubscriptionDto {
   name: string;
   username: string;
+  playlistName?: string;
   password: string;
   host: string;
   status?: string;
