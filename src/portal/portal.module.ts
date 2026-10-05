@@ -4,9 +4,10 @@ import { PortalService } from './portal.service';
 import { DevicesModule } from '../devices/devices.module';
 import { CustomersModule } from '../customers/customers.module';
 import { HostsModule } from '../hosts/hosts.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [DevicesModule, CustomersModule, HostsModule],
+  imports: [DevicesModule, CustomersModule, HostsModule, AuthModule],
   controllers: [PortalController],
   providers: [PortalService]
 })

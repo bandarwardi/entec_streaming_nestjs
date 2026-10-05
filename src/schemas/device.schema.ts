@@ -10,6 +10,9 @@ export class CustomPlaylist {
 
   @Prop({ required: true })
   url: string;
+
+  @Prop()
+  pinHash?: string;
 }
 
 export const CustomPlaylistSchema = SchemaFactory.createForClass(CustomPlaylist);

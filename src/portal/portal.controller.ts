@@ -1,5 +1,6 @@
-import { Controller, Post, Body, Get, Query, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, Param, UseGuards } from '@nestjs/common';
 import { PortalService } from './portal.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('portal')
 export class PortalController {
@@ -18,6 +19,28 @@ export class PortalController {
     return this.portalService.getPlaylists(macAddress, deviceKey);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('admin/playlists/:macAddress')
+  getAdminPlaylists(@Param('macAddress') macAddress: string) {
+    return this.portalService.getAdminPlaylists(macAddress);
+  }
+
+  @Post('playlists/:id/unlock')
+  unlockPlaylist(
+    @Param('id') playlistId: string,
+    @Body() body: { macAddress: string; deviceKey: string; pin: string },
+  ) {
+    return this.portalService.unlockPlaylist(body.macAddress, body.deviceKey, playlistId, body.pin);
+  }
+
+  @Post('playlists/:id/pin')
+  setPlaylistPin(
+    @Param('id') playlistId: string,
+    @Body() body: { macAddress: string; deviceKey: string; pin: string | null; currentPin?: string },
+  ) {
+    return this.portalService.setPlaylistPin(body.macAddress, body.deviceKey, playlistId, body.pin, body.currentPin);
+  }
+
   @Post('playlists')
   updatePlaylists(
     @Body() body: { macAddress: string; deviceKey: string; playlists: { name: string; url: string }[] },
@@ -31,6 +54,22 @@ export class PortalController {
     @Body() body: { macAddress: string; deviceKey: string }
   ) {
     return this.portalService.deleteSubscription(body.macAddress, body.deviceKey, subId);
+  }
+
+  @Post('subscription/:id/unlock')
+  unlockSubscription(
+    @Param('id') subId: string,
+    @Body() body: { macAddress: string; deviceKey: string; pin: string },
+  ) {
+    return this.portalService.unlockSubscription(body.macAddress, body.deviceKey, subId, body.pin);
+  }
+
+  @Post('subscription/:id/pin')
+  setSubscriptionPin(
+    @Param('id') subId: string,
+    @Body() body: { macAddress: string; deviceKey: string; pin: string | null; currentPin?: string },
+  ) {
+    return this.portalService.setSubscriptionPin(body.macAddress, body.deviceKey, subId, body.pin, body.currentPin);
   }
 
   @Post('subscription/update/:id')

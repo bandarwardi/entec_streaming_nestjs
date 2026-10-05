@@ -6,6 +6,7 @@ export class CustomerSubscriptionDto {
   status?: string;
   appActive?: boolean;
   appExpiry?: Date | string | null;
+  playlistPin?: string;
 }
 
 export class CreateCustomerDto {

@@ -31,6 +31,9 @@ export class CustomerSubscription {
   @Prop({ required: true })
   deviceKey: string;
 
+  @Prop({ select: false })
+  playlistPinHash?: string;
+
   @Prop({ type: Date, default: Date.now })
   lastActive: Date;
 
