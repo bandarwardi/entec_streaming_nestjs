@@ -11,6 +11,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { PlansModule } from './plans/plans.module';
 import { DevicesModule } from './devices/devices.module';
 import { PortalModule } from './portal/portal.module';
+import { AppUpdatesModule } from './app-updates/app-updates.module';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { PortalModule } from './portal/portal.module';
     AuthModule, 
     HostsModule, 
     CustomersModule, 
-    ClientModule, PlansModule, DevicesModule, PortalModule
+    ClientModule, PlansModule, DevicesModule, PortalModule, AppUpdatesModule
   ],
   controllers: [AppController],
   providers: [AppService],
